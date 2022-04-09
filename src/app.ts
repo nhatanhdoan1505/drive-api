@@ -3,7 +3,7 @@ import path = require("path");
 import cors from "cors";
 import * as bodyParser from "body-parser";
 import fs from "fs";
-import { google } from "googleapis";
+import { drive_v3, google } from "googleapis";
 import mime = require("mime-types");
 
 const KEY_FILE_PATH = "stoked-edition-321008-b98c9ee06b80.json";
@@ -29,8 +29,8 @@ const main = async () => {
 
     const { directoryPath, parents } = req.body;
 
-    const directoryLink = await uploadDirectory(AUTH, directoryPath, parents);
-    return res.status(200).json({ status: "OK", directoryLink });
+    const linkList = await uploadDirectory(AUTH, directoryPath, parents);
+    return res.status(200).json({ status: "OK", linkList });
   });
 
   const port = 4000;
@@ -69,14 +69,12 @@ const listAllFiles = async (directoryPath: string): Promise<string[]> => {
   directoryList = directoryList.map((directory) =>
     path.join(directoryPath, directory)
   );
-  console.log({ fileList, directoryList });
 
   let subDirectory = [...directoryList];
   while (isSubDirectory) {
     isSubDirectory = false;
     let initial = subDirectory.length;
     for (let folder of subDirectory) {
-      console.log("-----", folder);
       let { directoryList, fileList } = await listDirectory(folder);
       let newFileList = fileList.map((file) => path.join(folder, file));
 
@@ -101,13 +99,17 @@ const uploadDirectory = async (
   auth,
   directoryPath: string,
   parents: string[]
-): Promise<string> => {
+): Promise<string[]> => {
   const filesList = await listAllFiles(directoryPath);
-  filesList.map(async (file) => {
+  let fileIdListPromise = filesList.map((file) => {
     const fileStream = fs.createReadStream(file);
-    return await uploadFile(auth, fileStream, path.basename(file), parents);
+    return uploadFile(auth, fileStream, path.basename(file), parents);
   });
-  return `https://drive.google.com/drive/folders/${parents[0]}?usp=sharing`;
+  let fileIdList = await Promise.all(fileIdListPromise);
+  fileIdList = fileIdList.map(
+    (id) => `https://drive.google.com/file/d/${id}/view`
+  );
+  return fileIdList;
 };
 
 const uploadFile = async (
@@ -131,9 +133,24 @@ const uploadFile = async (
       media,
     });
 
+    await getPublicLink(driveService, res.data.id);
     return res.data.id;
   } catch (error) {
-    console.log(error);
+    return null;
+  }
+};
+
+const getPublicLink = async (driveService: drive_v3.Drive, fileId: string) => {
+  try {
+    const res = await driveService.permissions.create({
+      fileId,
+      requestBody: {
+        role: "writer",
+        type: "anyone",
+      },
+    });
+    return res;
+  } catch (error) {
     return null;
   }
 };
