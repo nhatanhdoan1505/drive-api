@@ -22,15 +22,22 @@ const main = async () => {
   app.use(bodyParser.urlencoded({ extended: false }));
 
   app.post("/upload", checkExistsDirectory, async (req, res) => {
-    if (!req.body.directoryPath || !req.body.parents)
+    if (!req.body.filePath || !req.body.parents)
       return res
         .status(400)
         .json({ status: "FAIL", msg: "Insufficient parameter" });
 
-    const { directoryPath, parents } = req.body;
+    const { filePath, parents } = req.body;
+    const fileStream = fs.createReadStream(filePath);
 
-    const linkList = await uploadDirectory(AUTH, directoryPath, parents);
-    return res.status(200).json({ status: "OK", linkList });
+    const id = await uploadFile(
+      AUTH,
+      fileStream,
+      path.basename(filePath),
+      parents
+    );
+    let link = `https://drive.google.com/file/d/${id}/view`;
+    return res.status(200).json({ status: "OK", link });
   });
 
   const port = 4000;
@@ -38,12 +45,10 @@ const main = async () => {
 };
 
 const checkExistsDirectory = async (req, res, next) => {
-  if (fs.existsSync(req.body.directoryPath)) {
+  if (fs.existsSync(req.body.filePath)) {
     return next();
   }
-  return res
-    .status(404)
-    .json({ status: "FAIL", msg: "Directory is not found" });
+  return res.status(404).json({ status: "FAIL", msg: "File is not found" });
 };
 
 const listDirectory = async (
