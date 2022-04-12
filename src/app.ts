@@ -52,6 +52,10 @@ const main = async () => {
     return res.status(200).json({ status: "OK", pdfList });
   });
 
+  app.get("/", (req, res) => {
+    return res.status(200).json({ status: "OK", isRunning: true });
+  });
+
   const port = 4000;
   app.listen(port, () => console.log(`Server is listening at port ${port}`));
 };
@@ -195,14 +199,13 @@ const convertHTMLtoPDF = ({
   filePath: string;
 }) =>
   new Promise<string>((resolve, reject) => {
-    console.log(file);
-    HTML_TO_PDF.create(file, { format: "A4" }).toFile(
-      filePath.replace(".html", ".pdf"),
-      (err, res) => {
-        console.log(res.filename);
-        resolve(res.filename);
-      }
-    );
+    HTML_TO_PDF.create(file, {
+      format: "A4",
+      width: "1080px",
+      height: "1296px",
+    }).toFile(filePath.replace(".html", ".pdf"), (err, res) => {
+      resolve(res.filename);
+    });
   });
 
 main();
