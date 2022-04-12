@@ -13,6 +13,7 @@ const AUTH = new google.auth.GoogleAuth({
   keyFile: KEY_FILE_PATH,
   scopes: SCOPES,
 });
+import * as HTML_TO_PDF from "html-pdf";
 
 const main = async () => {
   const app = express();
@@ -38,6 +39,17 @@ const main = async () => {
     );
     let link = `https://drive.google.com/file/d/${id}/view`;
     return res.status(200).json({ status: "OK", link });
+  });
+
+  app.post("/convert", async (req, res) => {
+    if (!req.body.fileList)
+      return res
+        .status(400)
+        .json({ status: "FAIL", msg: "Insufficient parameter" });
+
+    const { fileList } = req.body;
+    const pdfList = await convertHTMLtoPDFList(fileList as string[]);
+    return res.status(200).json({ status: "OK", pdfList });
   });
 
   const port = 4000;
@@ -159,5 +171,38 @@ const getPublicLink = async (driveService: drive_v3.Drive, fileId: string) => {
     return null;
   }
 };
+
+const convertHTMLtoPDFList = async (htmlPathList: string[]) => {
+  let htmlFileList = htmlPathList
+    .map((f) => {
+      if (fs.existsSync(f) && path.extname(f) === ".html") {
+        return { file: fs.readFileSync(f, "utf8").toString(), filePath: f };
+      }
+      return null;
+    })
+    .filter((f) => f);
+
+  console.log(htmlFileList);
+  const pdfListPromise = htmlFileList.map((f) => convertHTMLtoPDF({ ...f }));
+  return await Promise.all(pdfListPromise);
+};
+
+const convertHTMLtoPDF = ({
+  file,
+  filePath,
+}: {
+  file: string;
+  filePath: string;
+}) =>
+  new Promise<string>((resolve, reject) => {
+    console.log(file);
+    HTML_TO_PDF.create(file, { format: "A4" }).toFile(
+      filePath.replace(".html", ".pdf"),
+      (err, res) => {
+        console.log(res.filename);
+        resolve(res.filename);
+      }
+    );
+  });
 
 main();
